@@ -1,0 +1,49 @@
+name: Build VST3
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            configure: ""
+          - name: macOS
+            os: macos-latest
+            configure: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          - name: Linux
+            os: ubuntu-latest
+            configure: ""
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxext-dev libxcomposite-dev libfreetype-dev libfontconfig1-dev
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.configure }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4 --target Gamaka_VST3 gamaka_tests
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gamaka-VST3-${{ matrix.name }}
+          path: build/Gamaka_artefacts/Release/VST3/Gamaka.vst3
